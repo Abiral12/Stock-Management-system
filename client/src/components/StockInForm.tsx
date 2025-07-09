@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion';
 import { X, Package, Ruler, Palette, Box, Loader } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { getAuthToken } from '@/utils/auth';
 import { toast } from 'react-hot-toast';
@@ -10,6 +10,7 @@ import { toast } from 'react-hot-toast';
 const StockInForm = ({ onClose, onAddProduct }: any) => {
   const [formData, setFormData] = useState({
     category: '',
+    subcategory: '',
     size: '',
     color: '',
     quantity: 0,
@@ -19,6 +20,24 @@ const StockInForm = ({ onClose, onAddProduct }: any) => {
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [subcategories, setSubcategories] = useState<string[]>([]);
+
+  // Update subcategories when category changes
+  useEffect(() => {
+    if (formData.category === 'clothing') {
+      setSubcategories(['t-shirt', 'trousers', 'shirts', 'formal-pants', 'jeans-pants']);
+      // Reset subcategory and size when switching to clothing
+      setFormData(prev => ({ ...prev, subcategory: '', size: '' }));
+    } else if (formData.category === 'accessories') {
+      setSubcategories(['belt', 'purse', 'wallet', 'watch', 'hat']);
+      // Reset subcategory and clear size when switching to accessories
+      setFormData(prev => ({ ...prev, subcategory: '', size: '' }));
+    } else {
+      setSubcategories([]);
+      // Clear size when no category is selected
+      setFormData(prev => ({ ...prev, size: '' }));
+    }
+  }, [formData.category]);
 
   const handleChange = (e: any) => {
     const { name, value } = e.target;
@@ -33,6 +52,29 @@ const StockInForm = ({ onClose, onAddProduct }: any) => {
     setIsLoading(true);
     setError('');
     
+    // Validate form before submission
+    if (!formData.category) {
+      setError('Category is required');
+      setIsLoading(false);
+      toast.error('Category is required');
+      return;
+    }
+    
+    if (!formData.subcategory) {
+      setError('Subcategory is required');
+      setIsLoading(false);
+      toast.error('Subcategory is required');
+      return;
+    }
+    
+    // Validate clothing requires size
+    // if (formData.category === 'clothing' && !formData.size) {
+    //   setError('Size is required for clothing items');
+    //   setIsLoading(false);
+    //   toast.error('Size is required for clothing');
+    //   return;
+    // }
+
     const token = getAuthToken();
     if (!token) {
       setError('Authentication required. Please log in again.');
@@ -41,10 +83,11 @@ const StockInForm = ({ onClose, onAddProduct }: any) => {
       return;
     }
     
-    // Create payload with proper data types
+    // Create payload - don't include size for accessories
     const payload = {
-      category: formData.category.toLowerCase(),
-      size: formData.size,
+      category: formData.category,
+      subcategory: formData.subcategory,
+      ...(formData.category === 'clothing' && { size: formData.size }), // Only include size for clothing
       color: formData.color,
       quantity: Number(formData.quantity),
       purchasePrice: Number(formData.purchasePrice),
@@ -101,6 +144,7 @@ const StockInForm = ({ onClose, onAddProduct }: any) => {
         transition={{ duration: 0.3, ease: 'easeOut' }}
         className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden border border-gray-200"
       >
+        {/* Header remains the same */}
         <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-gray-200 p-6 flex justify-between items-center">
           <div>
             <h2 className="text-xl font-bold text-gray-900">Add New Stock</h2>
@@ -122,11 +166,11 @@ const StockInForm = ({ onClose, onAddProduct }: any) => {
           )}
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Product Category */}
+            {/* Main Category */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 flex items-center">
                 <Package className="h-4 w-4 mr-2 text-blue-600" /> 
-                Product Category
+                Main Category
               </label>
               <div className="relative">
                 <select 
@@ -136,13 +180,9 @@ const StockInForm = ({ onClose, onAddProduct }: any) => {
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white pl-3 pr-10 shadow-sm transition"
                   required
                 >
-                  <option value="">Select category</option>
-                  <option value="t-shirt">T-Shirt</option>
-                  <option value="trousers">Trousers</option>
-                  <option value="formal-pants">Formal Pants</option>
-                  <option value="jeans-pants">Jeans Pants</option>
-                  <option value="shirts">Shirts</option>
-                  <option value="Accessory">Accessory</option>
+                  <option value="">Select main category</option>
+                  <option value="clothing">Clothing</option>
+                  <option value="accessories">Accessories</option>
                 </select>
                 <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
                   <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -152,42 +192,74 @@ const StockInForm = ({ onClose, onAddProduct }: any) => {
               </div>
             </div>
             
-            {/* Size */}
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700 flex items-center">
-                <Ruler className="h-4 w-4 mr-2 text-indigo-600" /> 
-                Size
-              </label>
-              <div className="relative">
-                <select 
-                  name="size"
-                  value={formData.size}
-                  onChange={handleChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white pl-3 pr-10 shadow-sm transition"
-                  required
-                >
-                  <option value="">Select size</option>
-                  <option value="XS">XS</option>
-                  <option value="S">S</option>
-                  <option value="M">M</option>
-                  <option value="L">L</option>
-                  <option value="XL">XL</option>
-                  <option value="XXL">XXL</option>
-                  <option value="Universal">Universal</option>
-                </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
-                  <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
+            {/* Subcategory */}
+            {formData.category && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 flex items-center">
+                  <Package className="h-4 w-4 mr-2 text-indigo-600" /> 
+                  Subcategory
+                </label>
+                <div className="relative">
+                  <select 
+                    name="subcategory"
+                    value={formData.subcategory}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white pl-3 pr-10 shadow-sm transition"
+                    required
+                  >
+                    <option value="">Select subcategory</option>
+                    {subcategories.map((subcat) => (
+                      <option key={subcat} value={subcat}>
+                        {subcat.charAt(0).toUpperCase() + subcat.slice(1).replace('-', ' ')}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
             
-            {/* Color */}
+            {/* Size - Only shown and required for clothing */}
+            {formData.category === 'clothing' && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-gray-700 flex items-center">
+                  <Ruler className="h-4 w-4 mr-2 text-indigo-600" /> 
+                  Size
+                </label>
+                <div className="relative">
+                  <select 
+                    name="size"
+                    value={formData.size}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none bg-white pl-3 pr-10 shadow-sm transition"
+                    required
+                  >
+                    <option value="">Select size</option>
+                    <option value="XS">XS</option>
+                    <option value="S">S</option>
+                    <option value="M">M</option>
+                    <option value="L">L</option>
+                    <option value="XL">XL</option>
+                    <option value="XXL">XXL</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                    <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Color - Not required */}
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700 flex items-center">
                 <Palette className="h-4 w-4 mr-2 text-purple-600" /> 
-                Color
+                Color (optional)
               </label>
               <input 
                 type="text" 
@@ -196,7 +268,6 @@ const StockInForm = ({ onClose, onAddProduct }: any) => {
                 onChange={handleChange}
                 placeholder="e.g., Black"
                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent shadow-sm transition"
-                required
               />
             </div>
             

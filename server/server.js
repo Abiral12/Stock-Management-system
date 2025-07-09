@@ -1,6 +1,7 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const path = require('path');
 const connectDB = require('./config/db');
 const adminRoutes = require('./routes/adminRoutes');
 const productRoutes = require('./routes/productRoutes');
@@ -16,8 +17,10 @@ app.use(cors({
   credentials: true,
 }));
 
+
 app.use(express.json());
-app.use('/public', express.static('public'));
+app.use(express.static('public'));
+app.use('/qrcodes', express.static(path.join(__dirname, 'public/qrcodes')));
 
 // Routes
 app.use('/api/admin', adminRoutes);

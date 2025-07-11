@@ -1,72 +1,70 @@
-// components/ReportsChart.tsx
 'use client';
 
-import { motion } from 'framer-motion';
-import { Bar } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend,
-} from 'chart.js';
+import React, { useEffect, useState } from "react";
+import { Line } from "react-chartjs-2";
 
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-  Tooltip,
-  Legend
-);
+type Trend = {
+  _id: string;
+  totalSold: number;
+  totalSales: number;
+};
 
-const ReportsChart = () => {
-  const options = {
-    responsive: true,
-    plugins: {
-      legend: {
-        position: 'top' as const,
-      },
-      title: {
-        display: true,
-        text: 'Monthly Sales Performance',
-      },
-    },
-  };
-  
-  const labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
-  
-  const data = {
-    labels,
-    datasets: [
-      {
-        label: 'T-Shirts',
-        data: [65, 59, 80, 81, 56, 55, 40],
-        backgroundColor: 'rgba(75, 192, 192, 0.6)',
-      },
-      {
-        label: 'Trousers',
-        data: [28, 48, 40, 19, 86, 27, 90],
-        backgroundColor: 'rgba(153, 102, 255, 0.6)',
-      },
-      {
-        label: 'Accessories',
-        data: [18, 38, 20, 29, 46, 37, 60],
-        backgroundColor: 'rgba(255, 159, 64, 0.6)',
-      },
-    ],
-  };
+type ReportsChartProps = {
+  fetchSalesTrends: (period?: string, start?: string, end?: string) => Promise<Trend[]>;
+};
+
+const ReportsChart: React.FC<ReportsChartProps> = ({ fetchSalesTrends }) => {
+  const [trends, setTrends] = useState<Trend[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const end = new Date();
+    const start = new Date();
+    start.setDate(end.getDate() - 30); 
+    fetchSalesTrends("daily", start.toISOString(), end.toISOString())
+      .then(setTrends)
+      .finally(() => setLoading(false));
+  }, [fetchSalesTrends]);
+
+  if (loading) return <div>Loading sales trends...</div>;
+  console.log("Sales trends data:", trends);
 
   return (
-    <motion.div
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      transition={{ duration: 0.5 }}
-    >
-      <Bar options={options} data={data} />
-    </motion.div>
+    <div style={{ height: 400 }}>
+      <Line
+        data={{
+          labels: trends.map(t => t._id),
+          datasets: [
+            {
+              label: "Units Sold",
+              data: trends.map(t => t.totalSold),
+              borderColor: "#3B82F6",
+              backgroundColor: "rgba(59, 130, 246, 0.1)",
+              tension: 0.3,
+              fill: true,
+            },
+            {
+              label: "Revenue",
+              data: trends.map(t => t.totalSales),
+              borderColor: "#10B981",
+              backgroundColor: "rgba(16, 185, 129, 0.1)",
+              tension: 0.3,
+              fill: true,
+            }
+          ]
+        }}
+        options={{
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "top" }
+          },
+          scales: {
+            y: { beginAtZero: true }
+          }
+        }}
+      />
+    </div>
   );
 };
 

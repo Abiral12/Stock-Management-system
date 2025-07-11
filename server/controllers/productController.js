@@ -2,6 +2,7 @@ const Product = require('../models/Products');
 const asyncHandler = require('express-async-handler');
 const { generateSKU } = require('../utils/skuGenerator'); 
 const generateQR = require('../utils/qrGenerator');
+const Sales = require('../models/sales');
 
 // @desc    Add a new product
 // @route   POST /api/products
@@ -200,12 +201,24 @@ const filterProducts = asyncHandler(async (req, res) => {
       }
     }
 
-    const products = await Product.find(filterCriteria).sort(sortOptions);
-    
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const products = await Product.find(filterCriteria)
+      .sort(sortOptions)
+      .skip(skip)
+      .limit(limit);
+
+    const total = await Product.countDocuments(filterCriteria);
+
     res.json({
       success: true,
       count: products.length,
-      products
+      products,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit)
     });
     
   } catch (error) {
@@ -256,6 +269,10 @@ const updateProduct = asyncHandler(async (req, res) => {
     throw new Error('Product not found');
   }
   
+  // Store previous quantity and soldCount for sale logging
+  const prevQuantity = product.quantity;
+  const prevSoldCount = product.soldCount;
+
   // Update product fields
   product.category = category || product.category;
   product.subcategory = subcategory || product.subcategory;
@@ -266,15 +283,40 @@ const updateProduct = asyncHandler(async (req, res) => {
   product.sellingPrice = sellingPrice || product.sellingPrice;
 
   // Update soldCount if provided, or increment if quantity is reduced
+  let soldAmount = 0;
   if (typeof soldCount === 'number') {
+    soldAmount = soldCount - product.soldCount;
     product.soldCount = soldCount;
-  } else if (typeof quantity === 'number' && quantity < product.quantity) {
-    // If quantity is reduced, increment soldCount by the amount sold
-    product.soldCount += (product.quantity - quantity);
+  } else if (typeof quantity === 'number' && quantity < prevQuantity) {
+    soldAmount = prevQuantity - quantity;
+    product.soldCount += soldAmount;
   }
   
   const updatedProduct = await product.save();
-  
+
+  // Log sale if quantity was reduced and soldAmount > 0
+  if (soldAmount > 0) {
+    await Sales.create({
+      productId: product._id,
+      quantity: soldAmount,
+      price: product.sellingPrice,
+      purchasePrice: product.purchasePrice
+    });
+  }
+
+  // If product is sold out, delete it
+  if (product.quantity === 0) {
+    console.log('Updating product:', product._id, 'Current quantity:', product.quantity, 'Request quantity:', quantity);
+    console.log('Deleting product:', product._id);
+    await product.deleteOne();
+    console.log('Deleted product:', product._id);
+    return res.json({
+      success: true,
+      message: 'Product sold out and removed from inventory',
+      product: null
+    });
+  }
+
   res.json({
     success: true,
     message: 'Product updated successfully',

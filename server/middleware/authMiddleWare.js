@@ -15,7 +15,7 @@ const protect = asyncHandler(async (req, res, next) => {
       // Attach static admin info to request
       req.admin = {
         id: decoded.id,
-        email: decoded.email
+        username: decoded.username
       };
       
       next();

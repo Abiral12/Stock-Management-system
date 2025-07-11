@@ -1,7 +1,7 @@
 // app/dashboard/page.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
   Bell,
@@ -50,16 +50,34 @@ ChartJS.register(
   Title
 );
 
+// import SalesComparison from "@/components/salesComparison";
+import ReportsPanel from '@/components/ReportsPanel';
+
+// Define a Product type
+interface Product {
+  _id: string;
+  sku: string;
+  category: string;
+  subcategory: string;
+  size?: string;
+  color?: string;
+  quantity: number;
+  purchasePrice: number;
+  sellingPrice: number;
+  qrCode?: string;
+  createdAt?: string;
+  lastUpdated?: string;
+  soldCount?: number;
+}
+
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [showStockIn, setShowStockIn] = useState(false);
   const [showSellModal, setShowSellModal] = useState(false);
-  const [scannedProduct, setScannedProduct] = useState<any>(null);
-  const [inventory, setInventory] = useState<any[]>([]);
+  const [inventory, setInventory] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
-  const [sortFilter, setSortFilter] = useState<string>("default");
   const [stats, setStats] = useState([
     {
       title: "Total Stock",
@@ -70,7 +88,7 @@ export default function Dashboard() {
     },
     {
       title: "Today's Sales",
-      value: "$0",
+      value: "RS 0",
       change: "+0%",
       icon: ShoppingBag,
       color: "bg-green-500",
@@ -82,19 +100,15 @@ export default function Dashboard() {
       icon: BarChart,
       color: "bg-amber-500",
     },
-    {
-      title: "New Arrivals",
-      value: "0",
-      change: "+0%",
-      icon: Bell,
-      color: "bg-purple-500",
-    },
+
   ]);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery] = useDebounce(searchQuery, 500);
-  // const [categoryFilter, setCategoryFilter] = useState("all");
   const [isSearching, setIsSearching] = useState(false);
   const router = useRouter();
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
 
   useEffect(() => {
     const token = getAuthToken();
@@ -120,88 +134,77 @@ export default function Dashboard() {
           headers: {
             Authorization: `Bearer ${token}`,
           },
-          params: {
-            sortBy: sortFilter !== "default" ? sortFilter : undefined,
-          },
+          params: { page, limit },
         }
       );
 
       if (response.data.success) {
         setInventory(response.data.products);
         updateStats(response.data.products);
+        setTotalPages(response.data.totalPages || 1);
       } else {
         throw new Error(response.data.message || "Failed to fetch products");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMsg =
-        err.response?.data?.message || "Failed to fetch products";
+        (err as any)?.response?.data?.message || "Failed to fetch products";
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
       setIsLoading(false);
     }
   };
+
   // Update stats based on inventory data
-  // Update stats based on inventory data
-  const updateStats = (products: any[]) => {
+  const updateStats = (products: Product[]) => {
     const totalStock = products.reduce((sum, item) => sum + item.quantity, 0);
     const lowStockItems = products.filter((item) => item.quantity < 10).length;
-    const newArrivals = products.filter(
-      (item) =>
-        new Date(item.createdAt) >
-        new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
-    ).length;
-
-    setStats([
-      {
-        title: "Total Stock",
-        value: totalStock.toLocaleString(),
-        change: "+0%",
-        icon: Package,
-        color: "bg-blue-500",
-      },
-      {
-        title: "Today's Sales",
-        value: "$0", // You might want to calculate actual sales here
-        change: "+0%",
-        icon: ShoppingBag,
-        color: "bg-green-500",
-      },
-      {
-        title: "Low Stock Items",
-        value: lowStockItems.toString(),
-        change: "+0%",
-        icon: BarChart,
-        color: "bg-amber-500",
-      },
-      // {
-      //   title: "New Arrivals",
-      //   value: newArrivals.toString(),
-      //   change: "+0%",
-      //   icon: Bell,
-      //   color: "bg-purple-500",
-      // },
-    ]);
+    setStats((prevStats) => prevStats.map((stat) => {
+      if (stat.title === "Total Stock") {
+        return { ...stat, value: totalStock.toLocaleString() };
+      }
+      if (stat.title === "Low Stock Items") {
+        return { ...stat, value: lowStockItems.toString() };
+      }
+      return stat;
+    }));
   };
+
+  // Add a function to fetch today's sales revenue
+  const fetchTodaysSales = useCallback(async () => {
+    const token = getAuthToken();
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    const end = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
+    const params: any = { period: 'daily', start: start.toISOString(), end: end.toISOString() };
+    const response = await axios.get(
+      `${process.env.NEXT_PUBLIC_API_BASE_URL}/sales/trends`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      }
+    );
+    // The trends array should have one entry for today
+    if (response.data.trends && response.data.trends.length > 0) {
+      return response.data.trends[0].totalSales;
+    }
+    return 0;
+  }, []);
 
   useEffect(() => {
     fetchProducts();
-  }, []);
-
-  // Handle barcode scanning
-  const handleScan = (sku: string) => {
-    console.log("Scanned SKU:", sku);
-    const product = inventory.find((item) => item.sku === sku);
-    if (product) {
-      setScannedProduct(product);
-      setShowSellModal(true);
-    } else {
-      toast.error("Product not found!");
-    }
-  };
+    // Fetch today's sales and update stats
+    fetchTodaysSales().then((todaysRevenue) => {
+      setStats((prevStats) => prevStats.map((stat) =>
+        stat.title === "Today's Sales"
+          ? { ...stat, value: `RS ${todaysRevenue}` }
+          : stat
+      ));
+    });
+  }, [page, limit]);
 
   // Add new product to inventory
-  const handleAddProduct = (newProduct: any) => {
+  const handleAddProduct = (newProduct: Product) => {
     if (!newProduct.createdAt) {
       newProduct.createdAt = new Date().toISOString();
     }
@@ -211,7 +214,7 @@ export default function Dashboard() {
   };
 
   // Edit product
-  const handleEdit = async (product: any) => {
+  const handleEdit = async (product: Product) => {
     const token = getAuthToken();
     if (!token) {
       toast.error("Authentication required");
@@ -240,9 +243,9 @@ export default function Dashboard() {
       } else {
         throw new Error(response.data.message || "Failed to update product");
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const errorMsg =
-        err.response?.data?.message || "Failed to update product";
+        (err as any)?.response?.data?.message || "Failed to update product";
       toast.error(errorMsg);
       throw err; // Re-throw the error to handle in DataTable
     } finally {
@@ -265,12 +268,10 @@ export default function Dashboard() {
       );
 
       setInventory((prev) => prev.filter((p) => p._id !== productId));
-      // Add success notification
       toast.success("Product deleted successfully!");
-    } catch (err: any) {
-      console.error("Delete failed:", err.response?.data?.message);
-      // Add error notification
-      toast.error(err.response?.data?.message || "Failed to delete product");
+    } catch (err: unknown) {
+      console.error("Delete failed:", (err as any)?.response?.data?.message);
+      toast.error((err as any)?.response?.data?.message || "Failed to delete product");
     }
   };
 
@@ -288,15 +289,9 @@ export default function Dashboard() {
     }
     try {
       setIsLoading(true);
-      // Calculate new quantity and new soldCount
-      const newQuantity = product.quantity - quantity;
-      const newSoldCount = (product.soldCount || 0) + quantity;
-      // Prepare updated product data
-      const updatedProduct = { ...product, quantity: newQuantity, soldCount: newSoldCount };
-      // Make PUT request to update product quantity and soldCount in backend
-      const response = await axios.put(
-        `${process.env.NEXT_PUBLIC_API_BASE_URL}/products/edit/${product._id}`,
-        updatedProduct,
+      const res = await axios.post(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/sales/create`,
+        { productId: product._id, quantity },
         {
           headers: {
             "Content-Type": "application/json",
@@ -304,20 +299,24 @@ export default function Dashboard() {
           },
         }
       );
-      if (response.data.success) {
-        setInventory((prev) =>
-          prev.map((item) =>
-            item._id === product._id ? { ...item, quantity: newQuantity, soldCount: newSoldCount } : item
-          )
-        );
+      if (res.data.success) {
+        const updatedProduct = res.data.product;
+        if (updatedProduct === null) {
+          setInventory((prev) => prev.filter((item) => item._id !== product._id));
+        } else {
+          setInventory((prev) =>
+            prev.map((item) =>
+              item._id === product._id ? updatedProduct : item
+            )
+          );
+        }
         toast.success("Product sold successfully!");
-        setShowSellModal(false);
       } else {
-        throw new Error(response.data.message || "Failed to update product");
+        throw new Error(res.data.message || "Failed to complete sale");
       }
     } catch (err: unknown) {
       const errorMsg =
-        (err as any)?.response?.data?.message || "Failed to update product";
+        (err as any)?.response?.data?.message || "Failed to complete sale";
       toast.error(errorMsg);
     } finally {
       setIsLoading(false);
@@ -377,7 +376,7 @@ export default function Dashboard() {
       // If search query is empty, reset to default view
       fetchProducts();
     }
-  }, [debouncedSearchQuery]);
+  }, [debouncedSearchQuery, page, limit]);
 
   const getStockTrendData = () => {
     const today = new Date();
@@ -399,6 +398,42 @@ export default function Dashboard() {
 
     return stockAddedData;
   };
+
+  const fetchSalesTrends = useCallback(
+    async (period = 'daily', start?: string, end?: string) => {
+      const token = getAuthToken();
+      const params: any = { period };
+      if (start && end) {
+        params.start = start;
+        params.end = end;
+      }
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/sales/trends`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params
+        }
+      );
+      return response.data.trends;
+    },
+    [] // Add dependencies if needed (e.g., if getAuthToken is not stable)
+  );
+
+  const fetchSalesComparison = useCallback(
+    async (period1Start: string, period1End: string, period2Start: string, period2End: string) => {
+      const token = getAuthToken();
+      const params = { period1Start, period1End, period2Start, period2End };
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_BASE_URL}/sales/compare`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          params
+        }
+      );
+      return response.data;
+    },
+    []
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -457,7 +492,7 @@ export default function Dashboard() {
 
         {/* Navigation Tabs */}
         <div className="flex border-b border-gray-200 mb-8">
-          {["overview", "inventory", "reports", "sacks"].map((tab) => (
+          {["overview", "inventory", "reports"].map((tab) => (
             <button
               key={tab}
               className={`px-4 py-3 font-medium relative ${
@@ -725,61 +760,50 @@ export default function Dashboard() {
                   </div>
                 </div>
               ) : (
-                <DataTable
-                  key={inventory.length}
-                  data={inventory}
-                  onEdit={handleEdit}
-                  onDelete={handleDelete}
-                />
+                <>
+                  <DataTable
+                    key={inventory.length}
+                    data={inventory}
+                    onEdit={handleEdit}
+                    onDelete={handleDelete}
+                  />
+                  {/* Pagination Controls */}
+                  <div className="flex justify-center items-center mt-4 space-x-4">
+                    <button
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
+                    >
+                      Previous
+                    </button>
+                    <span>Page {page} of {totalPages}</span>
+                    <button
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                      className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
+                    >
+                      Next
+                    </button>
+                    <select
+                      value={limit}
+                      onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
+                      className="ml-4 px-2 py-1 border rounded"
+                    >
+                      {[5, 10, 20, 50].map(size => (
+                        <option key={size} value={size}>{size} / page</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
             </div>
           </motion.div>
         )}
 
         {activeTab === "reports" && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <div className="bg-white rounded-xl shadow-sm p-6 mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                Sales Reports
-              </h2>
-              <ReportsChart />
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Fast-Moving Products
-                </h3>
-                {/* Fast moving products list */}
-              </div>
-              <div className="bg-white rounded-xl shadow-sm p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                  Low Stock Report
-                </h3>
-                {/* Low stock list */}
-              </div>
-            </div>
-          </motion.div>
+          <ReportsPanel fetchSalesTrends={fetchSalesTrends} fetchSalesComparison={fetchSalesComparison} />
         )}
 
-        {activeTab === "sacks" && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.4 }}
-          >
-            <div className="bg-white rounded-xl shadow-sm p-6">
-              <h2 className="text-xl font-semibold text-gray-900 mb-6">
-                Sack Management
-              </h2>
-              {/* Sack management UI */}
-            </div>
-          </motion.div>
-        )}
       </div>
 
       {/* Stock In Modal */}

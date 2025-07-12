@@ -6,7 +6,7 @@ import { Bar } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend } from "chart.js";
 import axios from "axios";
 import { getAuthToken } from '@/utils/auth';
-import { TrendingUp, CalendarDays, CalendarRange, ArrowUp, ArrowDown, Activity } from 'lucide-react';
+import { TrendingUp, CalendarDays, CalendarRange, ArrowUp, ArrowDown, Activity, ArrowRight, ArrowLeft } from 'lucide-react';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -19,12 +19,35 @@ interface SalesTrend {
   profitMargin: number;
 }
 
+interface SaleHistoryItem {
+  _id: string;
+  productId: {
+    sku: string;
+    category: string;
+    subcategory: string;
+    size?: string;
+    color?: string;
+    sellingPrice: number;
+    purchasePrice: number;
+  };
+  quantity: number;
+  price: number;
+  purchasePrice: number;
+  date: string;
+}
+
 export default function SalesPage() {
   const [weekData, setWeekData] = useState<SalesTrend[]>([]);
   const [monthData, setMonthData] = useState<SalesTrend[]>([]);
   const [yearData, setYearData] = useState<SalesTrend[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [salesHistory, setSalesHistory] = useState<SaleHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [historyError, setHistoryError] = useState("");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(10);
+  const [totalPages, setTotalPages] = useState(1);
 
   const fetchSalesTrends = useCallback(async (start: string, end: string, period: string) => {
     const token = getAuthToken();
@@ -63,14 +86,47 @@ export default function SalesPage() {
         setWeekData(week);
         setMonthData(month);
         setYearData(year);
-      } catch (err: any) {
-        setError(err?.response?.data?.message || "Failed to fetch sales data");
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          setError(err.response?.data?.message || "Failed to fetch sales data");
+        } else {
+          setError("Failed to fetch sales data");
+        }
       } finally {
         setLoading(false);
       }
     }
     fetchAll();
   }, [fetchSalesTrends]);
+
+  // Fetch sales history
+  useEffect(() => {
+    async function fetchHistory(page = 1, limit = 10) {
+      setHistoryLoading(true);
+      setHistoryError("");
+      try {
+        const token = getAuthToken();
+        const response = await axios.get(
+          `${process.env.NEXT_PUBLIC_API_BASE_URL}/sales/history`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            params: { page, limit }
+          }
+        );
+        setSalesHistory(response.data.sales);
+        setTotalPages(response.data.totalPages);
+      } catch (err: unknown) {
+        if (axios.isAxiosError(err)) {
+          setHistoryError(err.response?.data?.message || "Failed to fetch sales history");
+        } else {
+          setHistoryError("Failed to fetch sales history");
+        }
+      } finally {
+        setHistoryLoading(false);
+      }
+    }
+    fetchHistory(page, limit);
+  }, [page, limit]);
 
   const cardStyles = [
     {
@@ -179,7 +235,6 @@ export default function SalesPage() {
               
               {(() => {
                 const totalSales = weekData.reduce((sum, d) => sum + (d.totalSales || 0), 0);
-                const totalCost = weekData.reduce((sum, d) => sum + (d.totalCost || 0), 0);
                 const grossProfit = weekData.reduce((sum, d) => sum + (d.grossProfit || 0), 0);
                 const profitMargin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
                 const prevWeekSales = totalSales * 0.85; // Placeholder for demo
@@ -272,7 +327,6 @@ export default function SalesPage() {
               
               {(() => {
                 const totalSales = monthData.reduce((sum, d) => sum + (d.totalSales || 0), 0);
-                const totalCost = monthData.reduce((sum, d) => sum + (d.totalCost || 0), 0);
                 const grossProfit = monthData.reduce((sum, d) => sum + (d.grossProfit || 0), 0);
                 const profitMargin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
                 const prevMonthSales = totalSales * 0.92; // Placeholder for demo
@@ -365,7 +419,6 @@ export default function SalesPage() {
               
               {(() => {
                 const totalSales = yearData.reduce((sum, d) => sum + (d.totalSales || 0), 0);
-                const totalCost = yearData.reduce((sum, d) => sum + (d.totalCost || 0), 0);
                 const grossProfit = yearData.reduce((sum, d) => sum + (d.grossProfit || 0), 0);
                 const profitMargin = totalSales > 0 ? (grossProfit / totalSales) * 100 : 0;
                 const prevYearSales = totalSales * 0.88; // Placeholder for demo
@@ -446,66 +499,191 @@ export default function SalesPage() {
           </div>
         )}
 
-        <div className="mt-10 bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+                {/* Key Metrics Overview - Mobile Optimized */}
+                <div className="mt-10 bg-white rounded-2xl shadow-lg p-4 md:p-6 border border-gray-100">
           <h2 className="text-xl font-bold text-gray-800 mb-4">Key Metrics Overview</h2>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-5 border border-blue-200">
-              <div className="text-sm text-blue-700 mb-1">Total Revenue</div>
-              <div className="text-2xl font-bold text-blue-900 mb-2">RS {(
-                weekData.reduce((sum, d) => sum + (d.totalSales || 0), 0) +
-                monthData.reduce((sum, d) => sum + (d.totalSales || 0), 0) +
-                yearData.reduce((sum, d) => sum + (d.totalSales || 0), 0)
-              ).toLocaleString()}</div>
-              <div className="flex items-center text-sm text-blue-600">
-                <ArrowUp size={14} />
-                <span>12.5% from last period</span>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+            {/* Total Revenue */}
+            <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-sm text-blue-700 mb-1">Total Revenue</div>
+                  <div className="text-lg md:text-xl font-bold text-blue-900 mb-1">
+                    RS {(
+                      weekData.reduce((sum, d) => sum + (d.totalSales || 0), 0) +
+                      monthData.reduce((sum, d) => sum + (d.totalSales || 0), 0) +
+                      yearData.reduce((sum, d) => sum + (d.totalSales || 0), 0)
+                    ).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex items-center text-xs md:text-sm text-blue-600 bg-blue-100 px-2 py-1 rounded">
+                  <ArrowUp size={12} className="mr-1" />
+                  <span>12.5%</span>
+                </div>
               </div>
+              <div className="text-xs text-gray-500 mt-1">From last period</div>
             </div>
             
-            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-5 border border-green-200">
-              <div className="text-sm text-green-700 mb-1">Total Profit</div>
-              <div className="text-2xl font-bold text-green-900 mb-2">RS {(
-                weekData.reduce((sum, d) => sum + (d.grossProfit || 0), 0) +
-                monthData.reduce((sum, d) => sum + (d.grossProfit || 0), 0) +
-                yearData.reduce((sum, d) => sum + (d.grossProfit || 0), 0)
-              ).toLocaleString()}</div>
-              <div className="flex items-center text-sm text-green-600">
-                <ArrowUp size={14} />
-                <span>18.2% from last period</span>
+            {/* Total Profit */}
+            <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-sm text-green-700 mb-1">Total Profit</div>
+                  <div className="text-lg md:text-xl font-bold text-green-900 mb-1">
+                    RS {(
+                      weekData.reduce((sum, d) => sum + (d.grossProfit || 0), 0) +
+                      monthData.reduce((sum, d) => sum + (d.grossProfit || 0), 0) +
+                      yearData.reduce((sum, d) => sum + (d.grossProfit || 0), 0)
+                    ).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex items-center text-xs md:text-sm text-green-600 bg-green-100 px-2 py-1 rounded">
+                  <ArrowUp size={12} className="mr-1" />
+                  <span>18.2%</span>
+                </div>
               </div>
+              <div className="text-xs text-gray-500 mt-1">From last period</div>
             </div>
             
-            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-5 border border-amber-200">
-              <div className="text-sm text-amber-700 mb-1">Avg. Profit Margin</div>
-              <div className="text-2xl font-bold text-amber-900 mb-2">
-                {(
-                  (weekData.reduce((sum, d) => sum + (d.profitMargin || 0), 0) / (weekData.length || 1) +
-                  monthData.reduce((sum, d) => sum + (d.profitMargin || 0), 0) / (monthData.length || 1) +
-                  yearData.reduce((sum, d) => sum + (d.profitMargin || 0), 0) / (yearData.length || 1)
-                ) / 3).toFixed(1)}%
+            {/* Avg. Profit Margin */}
+            <div className="bg-gradient-to-br from-amber-50 to-amber-100 rounded-xl p-4 border border-amber-200">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-sm text-amber-700 mb-1">Avg. Profit Margin</div>
+                  <div className="text-lg md:text-xl font-bold text-amber-900 mb-1">
+                    {(
+                      (weekData.reduce((sum, d) => sum + (d.profitMargin || 0), 0) / (weekData.length || 1) +
+                      monthData.reduce((sum, d) => sum + (d.profitMargin || 0), 0) / (monthData.length || 1) +
+                      yearData.reduce((sum, d) => sum + (d.profitMargin || 0), 0) / (yearData.length || 1)
+                    ) / 3).toFixed(1)}%
+                  </div>
+                </div>
+                <div className="flex items-center text-xs md:text-sm text-amber-600 bg-amber-100 px-2 py-1 rounded">
+                  <ArrowUp size={12} className="mr-1" />
+                  <span>3.4%</span>
+                </div>
               </div>
-              <div className="flex items-center text-sm text-amber-600">
-                <ArrowUp size={14} />
-                <span>3.4% improvement</span>
-              </div>
+              <div className="text-xs text-gray-500 mt-1">Improvement</div>
             </div>
             
-            <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-xl p-5 border border-violet-200">
-              <div className="text-sm text-violet-700 mb-1">Items Sold</div>
-              <div className="text-2xl font-bold text-violet-900 mb-2">
-                {(
-                  weekData.reduce((sum, d) => sum + (d.totalSold || 0), 0) +
-                  monthData.reduce((sum, d) => sum + (d.totalSold || 0), 0) +
-                  yearData.reduce((sum, d) => sum + (d.totalSold || 0), 0)
-                ).toLocaleString()}
+            {/* Items Sold */}
+            <div className="bg-gradient-to-br from-violet-50 to-violet-100 rounded-xl p-4 border border-violet-200">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-sm text-violet-700 mb-1">Items Sold</div>
+                  <div className="text-lg md:text-xl font-bold text-violet-900 mb-1">
+                    {(
+                      weekData.reduce((sum, d) => sum + (d.totalSold || 0), 0) +
+                      monthData.reduce((sum, d) => sum + (d.totalSold || 0), 0) +
+                      yearData.reduce((sum, d) => sum + (d.totalSold || 0), 0)
+                    ).toLocaleString()}
+                  </div>
+                </div>
+                <div className="flex items-center text-xs md:text-sm text-violet-600 bg-violet-100 px-2 py-1 rounded">
+                  <ArrowUp size={12} className="mr-1" />
+                  <span>7.8%</span>
+                </div>
               </div>
-              <div className="flex items-center text-sm text-violet-600">
-                <ArrowUp size={14} />
-                <span>7.8% from last period</span>
-              </div>
+              <div className="text-xs text-gray-500 mt-1">From last period</div>
             </div>
           </div>
         </div>
+
+        {/* Sales History Table */}
+        <div className="mt-10 bg-white rounded-2xl shadow-lg p-6 border border-gray-100">
+          <h2 className="text-xl font-bold text-gray-800 mb-4">Product Sold History</h2>
+          {historyError && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-700">{historyError}</div>
+          )}
+          {historyLoading ? (
+            <div className="text-gray-500">Loading sales history...</div>
+          ) : salesHistory.length === 0 ? (
+            <div className="text-gray-500">No sales history found.</div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Product Name</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">SKU</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Category</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Quantity</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Sale Price</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cost Price</th>
+                    <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Profit</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-100">
+                  {salesHistory.map((sale) => (
+                    <tr key={sale._id}>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">{new Date(sale.date).toLocaleString()}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">{sale.productId?.subcategory || "-"} {sale.productId?.size ? `(${sale.productId.size})` : ""} {sale.productId?.color ? `- ${sale.productId.color}` : ""}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">{sale.productId?.sku || "-"}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">{sale.productId?.category || "-"}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-700">{sale.quantity}</td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-green-700">
+                        RS {(sale.price ?? 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-amber-700">
+                        RS {(sale.purchasePrice ?? 0).toLocaleString()}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-sm text-blue-700">
+                        RS {((sale.price ?? 0) - (sale.purchasePrice ?? 0)).toLocaleString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+           <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-3">
+    <div className="flex items-center gap-1 text-sm text-gray-600">
+      <span>Page {page} of {totalPages}</span>
+      <span className="hidden sm:inline">•</span>
+      <span>{salesHistory.length} items</span>
+    </div>
+    
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => setPage((p) => Math.max(1, p - 1))}
+        disabled={page === 1}
+        className="flex items-center justify-center p-2 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        aria-label="Previous page"
+      >
+        <ArrowLeft size={18} className="text-gray-700" />
+        <span className="sr-only sm:not-sr-only sm:ml-1">Previous</span>
+      </button>
+      
+      <button
+        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+        disabled={page === totalPages}
+        className="flex items-center justify-center p-2 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+        aria-label="Next page"
+      >
+        <span className="sr-only sm:not-sr-only sm:mr-1">Next</span>
+        <ArrowRight size={18} className="text-gray-700" />
+      </button>
+    </div>
+    
+    <div className="flex items-center gap-2 text-sm">
+      <label htmlFor="pageSize" className="text-gray-600">Rows:</label>
+      <select
+        id="pageSize"
+        value={limit}
+        onChange={e => { 
+          setLimit(Number(e.target.value)); 
+          setPage(1); 
+        }}
+        className="px-2 py-1 border rounded bg-white"
+      >
+        {[5, 10, 20, 50].map(size => (
+          <option key={size} value={size}>{size}</option>
+        ))}
+      </select>
+    </div>
+  </div>
+</div>
       </div>
     </div>
   );

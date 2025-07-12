@@ -11,6 +11,8 @@ import {
   Search,
   Plus,
   Scan,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import AdminHeader from "@/components/AdminHeader";
 import DataTable from "@/components/DataTable";
@@ -70,6 +72,16 @@ interface Product {
   soldCount?: number;
 }
 
+// Add this helper function above the Dashboard component
+const getLast7DaysLabels = () => {
+  const today = new Date();
+  return Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(today.getDate() - (6 - i));
+    // Format as yyyy-mm-dd
+    return date.toLocaleDateString('en-CA'); // 'en-CA' gives yyyy-mm-dd
+  });
+};
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("overview");
@@ -621,15 +633,7 @@ export default function Dashboard() {
                 <div className="h-64">
                   <Line
                     data={{
-                      labels: [
-                        "Day 1",
-                        "Day 2",
-                        "Day 3",
-                        "Day 4",
-                        "Day 5",
-                        "Day 6",
-                        "Today",
-                      ],
+                      labels: getLast7DaysLabels(),
                       datasets: [
                         {
                           label: "Stock Added",
@@ -768,36 +772,56 @@ export default function Dashboard() {
                     onDelete={handleDelete}
                   />
                   {/* Pagination Controls */}
-                  <div className="flex justify-center items-center mt-4 space-x-4">
-                    <button
-                      onClick={() => setPage((p) => Math.max(1, p - 1))}
-                      disabled={page === 1}
-                      className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-                    <span>Page {page} of {totalPages}</span>
-                    <button
-                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                      disabled={page === totalPages}
-                      className="px-4 py-2 bg-gray-200 rounded disabled:opacity-50"
-                    >
-                      Next
-                    </button>
-                    <select
-                      value={limit}
-                      onChange={e => { setLimit(Number(e.target.value)); setPage(1); }}
-                      className="ml-4 px-2 py-1 border rounded"
-                    >
-                      {[5, 10, 20, 50].map(size => (
-                        <option key={size} value={size}>{size} / page</option>
-                      ))}
-                    </select>
-                  </div>
-                </>
-              )}
+                  <div className="flex flex-col sm:flex-row justify-between items-center mt-4 gap-3">
+            <div className="flex items-center gap-1 text-sm text-gray-600">
+              <span>Page {page} of {totalPages}</span>
+              <span className="hidden sm:inline">•</span>
+              <span>{inventory.length} items</span>
             </div>
-          </motion.div>
+            
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="flex items-center justify-center p-2 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Previous page"
+              >
+                <ArrowLeft size={18} className="text-gray-700" />
+                <span className="sr-only sm:not-sr-only sm:ml-1">Previous</span>
+              </button>
+              
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="flex items-center justify-center p-2 rounded bg-gray-100 hover:bg-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                aria-label="Next page"
+              >
+                <span className="sr-only sm:not-sr-only sm:mr-1">Next</span>
+                <ArrowRight size={18} className="text-gray-700" />
+              </button>
+            </div>
+            
+            <div className="flex items-center gap-2 text-sm">
+              <label htmlFor="pageSize" className="text-gray-600">Rows:</label>
+              <select
+                id="pageSize"
+                value={limit}
+                onChange={e => { 
+                  setLimit(Number(e.target.value)); 
+                  setPage(1); 
+                }}
+                className="px-2 py-1 border rounded bg-white"
+              >
+                {[5, 10, 20, 50].map(size => (
+                  <option key={size} value={size}>{size}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  </motion.div>
         )}
 
         {activeTab === "reports" && (

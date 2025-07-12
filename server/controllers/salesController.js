@@ -1,5 +1,5 @@
 const Sales = require('../models/sales');
-const Product = require('../models/Products');
+const Products = require('../models/Products');
 
 exports.getSalesTrends = async (req, res) => {
   try {
@@ -101,6 +101,37 @@ exports.createSale = async (req, res) => {
     });
 
     res.json({ success: true, sale, product });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Get all sales history with product details
+exports.getSalesHistory = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const [sales, total] = await Promise.all([
+      Sales.find()
+        .sort({ date: -1 })
+        .skip(skip)
+        .limit(limit)
+        .populate({
+          path: 'productId',
+          select: 'sku category subcategory size color sellingPrice purchasePrice',
+        }),
+      Sales.countDocuments()
+    ]);
+
+    res.json({
+      success: true,
+      sales,
+      total,
+      page,
+      totalPages: Math.ceil(total / limit)
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

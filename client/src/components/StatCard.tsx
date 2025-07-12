@@ -13,7 +13,7 @@ interface StatCardProps {
   delay?: number;
 }
 
-const StatCard = ({ title, value, change, icon: Icon, color, delay = 0 }: StatCardProps) => {
+const StatCard = ({ title, value, change, icon: Icon, color, delay = 0,compact }: StatCardProps) => {
   const isPositive = change.startsWith('+');
   
   return (

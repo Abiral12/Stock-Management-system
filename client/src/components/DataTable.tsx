@@ -36,7 +36,7 @@ interface DataTableProps {
   onDelete: (productId: string) => void;
 }
 
-export default function DataTable({ data, onEdit, onDelete }: DataTableProps) {
+export default function DataTable({ data, onEdit, onDelete, isMobile }: DataTableProps) {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [currentProduct, setCurrentProduct] = useState<Product | null>(null);
   const [formData, setFormData] = useState<Partial<Product>>({});
@@ -148,11 +148,11 @@ export default function DataTable({ data, onEdit, onDelete }: DataTableProps) {
 
   return (
     <div className="overflow-x-auto">
-      {/* Category Filter Tabs */}
-      <div className="flex mb-4 border-b border-gray-200">
+      {/* Category Filter Tabs - Mobile optimized */}
+      <div className="flex mb-4 border-b border-gray-200 overflow-x-auto scrollbar-hide -mx-4 px-4 md:mx-0 md:px-0">
         <button
           onClick={() => setCategoryFilter("all")}
-          className={`px-4 py-2 font-medium text-sm ${
+          className={`px-3 py-2 font-medium text-sm flex-shrink-0 ${
             categoryFilter === "all"
               ? "border-b-2 border-blue-500 text-blue-600"
               : "text-gray-500 hover:text-gray-700"
@@ -162,7 +162,7 @@ export default function DataTable({ data, onEdit, onDelete }: DataTableProps) {
         </button>
         <button
           onClick={() => setCategoryFilter("clothing")}
-          className={`px-4 py-2 font-medium text-sm ${
+          className={`px-3 py-2 font-medium text-sm flex-shrink-0 ${
             categoryFilter === "clothing"
               ? "border-b-2 border-blue-500 text-blue-600"
               : "text-gray-500 hover:text-gray-700"
@@ -172,7 +172,7 @@ export default function DataTable({ data, onEdit, onDelete }: DataTableProps) {
         </button>
         <button
           onClick={() => setCategoryFilter("accessories")}
-          className={`px-4 py-2 font-medium text-sm ${
+          className={`px-3 py-2 font-medium text-sm flex-shrink-0 ${
             categoryFilter === "accessories"
               ? "border-b-2 border-blue-500 text-blue-600"
               : "text-gray-500 hover:text-gray-700"
